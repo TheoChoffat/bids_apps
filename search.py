@@ -1,6 +1,8 @@
 from bids.layout import BIDSLayout
 import os
 import json
+import csv
+
 
 def get_layout(bids_root):
     """
@@ -24,6 +26,9 @@ def get_readme_preview(dataset_dir):
 
 
 def search_name(database_root, keyword):
+    if not keyword.strip():
+        return []
+
     dataset_dirs = get_all_datasets(database_root)
     matching_datasets = []
 
@@ -37,6 +42,43 @@ def search_name(database_root, keyword):
                     matching_datasets.append((data['Name'], dataset_dir, readme_preview))
 
     return matching_datasets
+
+
+def search_participant(database_root, age_range=(0, 100)):
+    dataset_dirs = get_all_datasets(database_root)
+    matching_datasets = []
+    
+    for dataset_dir in dataset_dirs:
+        participants_file = os.path.join(dataset_dir, 'participants.tsv')
+        
+        if os.path.exists(participants_file):
+            with open(participants_file, 'r', newline='', encoding='utf-8') as f:
+                reader = csv.DictReader(f, delimiter='\t')
+                
+                matched_participants = []
+                
+                # If age column exists in the dataset
+                if "age" in reader.fieldnames:
+                    for row in reader:
+                        try:
+                            age = int(row["age"])
+
+                            # Only include participants within the age range
+                            if age_range[0] <= age <= age_range[1]:
+                                matched_participants.append((row["participant_id"], age))
+                        except ValueError:
+                            continue  # Skip if age can't be converted to an int
+
+                # If any participants matched, store the dataset details
+                if matched_participants:
+                    description_file = os.path.join(dataset_dir, 'dataset_description.json')
+                    with open(description_file, 'r') as f:
+                        data = json.load(f)
+                        readme_preview = get_readme_preview(dataset_dir)
+                        matching_datasets.append((data['Name'], dataset_dir, readme_preview, matched_participants))
+
+    return matching_datasets
+
 
 def truncate_text(text, max_length):
         if len(text) > max_length:
