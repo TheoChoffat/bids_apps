@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import *
+from tkinter import ttk
 import customtkinter as ctk
 from search import get_layout, insert_newlines, search_name, search_participant, truncate_text
 from tkinter import font
@@ -34,28 +35,41 @@ class MainWindow(tk.Tk):
         # Top frame for filters
         self.top_frame = ctk.CTkFrame(self)
         self.top_frame.pack(fill="x", pady=(10, 10), padx=20)
-        
+
         # DATABASE FILTERS
         # Name dataset filter
-        self.filter_label = Label(self.top_frame, text="Database Filters :", anchor="w")
-        self.filter_label.pack(pady=(10,0), padx=5, anchor="w")
-        self.name_label = Label(self.top_frame, text="Dataset Name: ")
-        self.name_label.pack(side="left", pady=10, padx=5)
+        self.filter_label = Label(self.top_frame, text="Database Filters :", anchor="w", background="#DBDBDB", font=self.name_font)
+        self.filter_label.grid(row=0, column=0, columnspan=3, pady=(10, 0), padx=5, sticky="w")
+
+        self.name_label = Label(self.top_frame, text="Dataset Name: ", background="#DBDBDB")
+        self.name_label.grid(row=1, column=0, pady=10, padx=5, sticky="w")
         self.keyword_entry = Entry(self.top_frame)
-        self.keyword_entry.pack(side="left", fill="none", expand=False)
-        
+        self.keyword_entry.grid(row=1, column=1, columnspan=2, pady=10, padx=5, sticky="ew")
+
         # Participant.tsv age filter
-        self.age_label = Label(self.top_frame, text="Age Range: ")
-        self.age_label.pack(side="left", pady=10, padx=5)
-        self.age_min_label = Label(self.top_frame, text="0")
-        self.age_min_label.pack(side="left", pady=10, padx=5)
+        self.age_label = Label(self.top_frame, text="Age Range: ", background="#DBDBDB")
+        self.age_label.grid(row=2, column=0, pady=10, padx=5, sticky="w")
+        
+        self.age_min_label = Label(self.top_frame, text="0", background="#DBDBDB", foreground="#3B8ED0", font=self.name_font)
+        self.age_min_label.grid(row=2, column=1, pady=10, padx=0, sticky="w")
+        
         self.age_range = (0, 100)
+        
         self.age_slider = CTkRangeSlider(self.top_frame, from_=0, to=100)
-        self.age_slider.pack(side="left", padx=10)
+        self.age_slider.grid(row=2, column=2, pady=10, padx=0, sticky="ew")
         self.age_slider.set(self.age_range)
         self.age_slider.bind("<ButtonRelease-1>", self.update_age_labels)
-        self.age_max_label = Label(self.top_frame, text="100")
-        self.age_max_label.pack(side="left", pady=10, padx=5)
+        
+        self.age_max_label = Label(self.top_frame, text="100", background="#DBDBDB", foreground="#3B8ED0", font=self.name_font)
+        self.age_max_label.grid(row=2, column=3, pady=10, padx=(0,10), sticky="w")
+        
+        # Participant.tsv sex filter
+        self.sex_label = Label(self.top_frame, text="Gender: ", background="#DBDBDB")
+        self.sex_label.grid(row=2, column=4, pady=10, padx=10, sticky="ew")
+
+        self.sex_options = ["", "Male (M)", "Female (F)", "Others (O)"]
+        self.sex_combobox = ttk.Combobox(self.top_frame, values=self.sex_options, width=12)
+        self.sex_combobox.grid(row=2, column=5, pady=10, padx=10, sticky="ew")
         
         
         # SEARCH BUTTON
@@ -71,11 +85,11 @@ class MainWindow(tk.Tk):
         self.bottom_frame.pack(fill="x", pady=(10), padx=20, expand=True)
 
         # Title for Results
-        self.result_title_label = Label(self.bottom_frame, text="Results :", anchor="w")
+        self.result_title_label = Label(self.bottom_frame, text="Results :", anchor="w", background="#DBDBDB", font=self.name_font)
         self.result_title_label.pack(pady=10, padx=5, anchor="w")
 
         # Label to display search results
-        self.result_label = Label(self.bottom_frame, text="", anchor="w", justify="left")
+        self.result_label = Label(self.bottom_frame, text="", anchor="w", justify="left", background="#DBDBDB")
         self.result_label.pack(pady=20, padx=5, anchor="w", fill="x")
         self.result_label.config(text="Welcome, please enter a filter and press Search.")
 
@@ -83,25 +97,38 @@ class MainWindow(tk.Tk):
     def search_datasets(self):
         keyword = self.keyword_entry.get().strip()
         age_range = self.age_slider.get()
+        selected_sex = self.sex_combobox.get()
+
+        if selected_sex == "Male (M)":
+            filter_sex = "M"
+        elif selected_sex == "Female (F)":
+            filter_sex = "F"
+        elif selected_sex == "Others (O)":
+            filter_sex = "O"
+        else:
+            filter_sex = "all"
 
         if not isinstance(age_range, tuple) or len(age_range) != 2:
             age_range = (0, 100)
+
+        no_filter_active = not keyword and age_range == (0, 100) and filter_sex == "all"
 
         datasets_by_name = {}
         datasets_by_participant = {}
 
         if keyword:
             datasets_by_name = {tuple(dataset[:3]): dataset for dataset in search_name(self.database_root, keyword)}
-        else:
-            datasets_by_name = {tuple(dataset[:3]): dataset for dataset in search_participant(self.database_root, age_range=age_range)}
-
-        if age_range != (0, 100):
-            datasets_by_participant = {tuple(dataset[:3]): dataset for dataset in search_participant(self.database_root, age_range=age_range)}
-        else:
-            datasets_by_participant = datasets_by_name
+        
+        datasets_by_participant = {tuple(dataset[:3]): dataset for dataset in search_participant(self.database_root, age_range=age_range, sex=filter_sex, no_filter=no_filter_active)}
 
         # Determine the final set of matching datasets.
-        matching_datasets = {key: value for key, value in datasets_by_name.items() if key in datasets_by_participant}
+        if keyword:
+            if datasets_by_participant:
+                matching_datasets = {k: v for k, v in datasets_by_name.items() if k in datasets_by_participant}
+            else:
+                matching_datasets = datasets_by_name
+        else:
+            matching_datasets = datasets_by_participant
 
         # Convert back to list
         matching_datasets = list(matching_datasets.values())
@@ -112,39 +139,29 @@ class MainWindow(tk.Tk):
 
         if matching_datasets:
             for dataset in matching_datasets:
-                if len(dataset) == 3:  # This is from search_name function
-                    name, path, readme_preview = dataset
-                    
-                    # rest of your code for displaying these datasets
-                    name_label = Label(self.bottom_frame, text=truncate_text(name, 100), anchor="w", justify="left", foreground="black", font=self.name_font)
-                    name_label.pack(pady=(5, 0), padx=5, anchor="w", fill="x")
-                    
-                    path_label = Label(self.bottom_frame, text=path, anchor="w", justify="left", foreground="green", font=self.path_font)
-                    path_label.pack(pady=(0, 0), padx=5, anchor="w", fill="x")
+                name, path, readme_preview, *matched_participants = dataset
+                
+                # If dataset is from search_name, matched_participants will be empty
+                matched_participants = matched_participants[0] if matched_participants else []
 
-                    readme_label = Label(self.bottom_frame, text=truncate_text(insert_newlines(readme_preview, 125), 500), anchor="w", justify="left", font=self.path_font)
-                    readme_label.pack(pady=(0, 10), padx=5, anchor="w", fill="x")
+                # Displaying the dataset details
+                name_label = Label(self.bottom_frame, text=truncate_text(name, 100), anchor="w", justify="left", foreground="black", font=self.name_font)
+                name_label.pack(pady=(10, 0), padx=5, anchor="w", fill="x")
 
-                elif len(dataset) == 4:  # This is from search_participant function
-                    name, path, readme_preview, matched_participants = dataset
-                    
-                    # Code for displaying the dataset details similar to above
-                    name_label = Label(self.bottom_frame, text=truncate_text(name, 100), anchor="w", justify="left", foreground="black", font=self.name_font)
-                    name_label.pack(pady=(5, 0), padx=5, anchor="w", fill="x")
-                    
-                    path_label = Label(self.bottom_frame, text=path, anchor="w", justify="left", foreground="green", font=self.path_font)
-                    path_label.pack(pady=(0, 0), padx=5, anchor="w", fill="x")
+                path_label = Label(self.bottom_frame, text=path, anchor="w", justify="left", foreground="green", font=self.path_font)
+                path_label.pack(pady=(0, 0), padx=5, anchor="w", fill="x")
 
-                    readme_label = Label(self.bottom_frame, text=truncate_text(insert_newlines(readme_preview, 125), 500), anchor="w", justify="left", font=self.path_font)
-                    readme_label.pack(pady=(0, 10), padx=5, anchor="w", fill="x")
-                    
-                    # Display matched participants
-                    for participant_id, age in matched_participants:
-                        if age is not None:
-                            participant_label = Label(self.bottom_frame, text=f"Participant: {participant_id}, Age: {age}", anchor="w", justify="left", font=self.path_font)
-                        else:
-                            participant_label = Label(self.bottom_frame, text=f"Participant: {participant_id}", anchor="w", justify="left", font=self.path_font)
-                        participant_label.pack(pady=(0, 5), padx=5, anchor="w", fill="x")
+                readme_label = Label(self.bottom_frame, text=truncate_text(insert_newlines(readme_preview, 125), 500), anchor="w", justify="left", font=self.path_font)
+                readme_label.pack(pady=(0, 2), padx=5, anchor="w", fill="x")
+
+                # Display matched participants
+                for participant_id, age in matched_participants:
+                    if age is not None:
+                        participant_label = Label(self.bottom_frame, text=f"Participant: {participant_id}, Age: {age}", anchor="w", justify="left", font=self.path_font)
+                    else:
+                        participant_label = Label(self.bottom_frame, text=f"Participant: {participant_id}", anchor="w", justify="left", font=self.path_font)
+                    participant_label.pack(pady=(0, 1), padx=5, anchor="w", fill="x")
+
         else:
             no_result_label = Label(self.bottom_frame, text="No matching datasets found.", anchor="w", justify="left")
             no_result_label.pack(pady=20, padx=5, anchor="w", fill="x")

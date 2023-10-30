@@ -44,30 +44,63 @@ def search_name(database_root, keyword):
     return matching_datasets
 
 
-def search_participant(database_root, age_range=(0, 100)):
+def search_participant(database_root, age_range=(0, 100), sex="all", no_filter=False):
     dataset_dirs = get_all_datasets(database_root)
     matching_datasets = []
-    
+
     for dataset_dir in dataset_dirs:
         participants_file = os.path.join(dataset_dir, 'participants.tsv')
-        
-        if os.path.exists(participants_file):
+
+        if no_filter and not os.path.exists(participants_file):
+            description_file = os.path.join(dataset_dir, 'dataset_description.json')
+            with open(description_file, 'r') as f:
+                data = json.load(f)
+                readme_preview = get_readme_preview(dataset_dir)
+                matching_datasets.append((data['Name'], dataset_dir, readme_preview))
+            continue
+
+        elif os.path.exists(participants_file):
             with open(participants_file, 'r', newline='', encoding='utf-8') as f:
                 reader = csv.DictReader(f, delimiter='\t')
-                
                 matched_participants = []
-                
-                # If age column exists in the dataset
-                if "age" in reader.fieldnames:
-                    for row in reader:
-                        try:
-                            age = int(row["age"])
 
+                # Normalize column names
+                normalized_columns = [col.lower() for col in reader.fieldnames]
+                
+                # Check for the sex/gender column and access original column name
+                sex_column = None
+                if "sex" in normalized_columns:
+                    sex_column = "sex"
+                elif "gender" in normalized_columns:
+                    sex_column = "gender"
+                if sex_column:
+                    sex_column_original = next((col for col in reader.fieldnames if col.lower() == sex_column), None)
+
+            
+                if "age" not in normalized_columns and age_range != (0, 100):
+                    continue  
+
+                for row in reader:
+                    # AGE FILTERING
+                    if "age" in normalized_columns:
+                        try:
+                            age = int(row.get("age", 0))
                             # Only include participants within the age range
-                            if age_range[0] <= age <= age_range[1]:
-                                matched_participants.append((row["participant_id"], age))
+                            if not (age_range[0] <= age <= age_range[1]):
+                                continue
                         except ValueError:
-                            continue  # Skip if age can't be converted to an int
+                            # Skip if age can't be converted to an int
+                            continue
+
+                    # SEX FILTERING
+                    if sex_column_original and sex != "all":
+                        participant_sex = row.get(sex_column_original, "").lower()
+                        if (sex == "M" and participant_sex not in ["m", "male"]) or \
+                           (sex == "F" and participant_sex not in ["f", "female"]) or \
+                           (sex == "O" and participant_sex not in ["o", "other", "others"]):
+                            continue
+
+                    matched_participants.append((row["participant_id"], row.get("age")))
 
                 # If any participants matched, store the dataset details
                 if matched_participants:
