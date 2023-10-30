@@ -1,0 +1,12 @@
+# PyInstaller build output
+/build
+/dist
+/*.spec
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# If using an environment in the project directory
+/env/
+/bids_project_env/
